@@ -1,0 +1,29 @@
+# Usage: 
+# systemd-ask-password "Private key pass:" | openssl req -new -passout stdin -config keycloak.ext -out keycloak.csr
+[ req ]
+default_bits                = 4096
+default_md                  = SHA-256
+default_keyfile             = auth.home.arpa.key
+distinguished_name          = req_distinguished_name
+req_extensions              = v3_ca
+prompt                      = no
+
+[ req_distinguished_name ]
+C                           = FI
+#ST                         = 
+L                           = Cloud
+O                           = Home
+#OU                         = 
+CN                          = auth.home.arpa
+#emailAddress               = 
+
+[ v3_ca ]
+subjectKeyIdentifier        = hash
+#authorityKeyIdentifier     = keyid:always,issuer:always # Can't use when only creating CSRs
+basicConstraints            = critical, CA:FALSE
+keyUsage                    = critical, digitalSignature, keyEncipherment
+extendedKeyUsage            = critical, serverAuth, clientAuth
+subjectAltName              = @alt_names
+
+[alt_names]
+DNS.1 = auth.home.arpa
