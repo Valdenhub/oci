@@ -1,0 +1,92 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keycloak-postgres
+  namespace: keycloak
+spec:
+  # https://cloudnative-pg.io/documentation/1.22/cloudnative-pg.v1/
+  instances: 1
+  imageName: docker.io/postgres:15.6@sha256:9c30e00d73f42952db8ade465a897b51f3a7964c0067730646eb9253cb0b5301
+  postgresUID: 999
+  postgresGID: 999
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+  storage:
+    size: 5Gi
+---
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: keycloak
+spec:
+  instances: 1
+  #image:
+  db:
+    vendor: postgres
+    host: keycloak-postgres-rw
+    database: keycloak
+    # port: 5432
+    # schema: schema
+    poolInitialSize: 1
+    poolMinSize: 2
+    poolMaxSize: 3
+    usernameSecret:
+      name: keycloak-postgres-app
+      key: username
+    passwordSecret:
+      name: keycloak-postgres-app
+      key: password
+  truststores:
+    home-arpa-root-ca:
+      secret:
+        name: home-arpa-root-ca
+  http:
+    httpEnabled: true
+    httpPort: 8080
+    httpsPort: 8443
+    tlsSecret: keycloak-tls-secret
+  hostname:
+    hostname: auth.home.arpa
+    #admin: auth.home.arpa
+    strict: true
+    strictBackchannel: true
+  # features:
+  #   enabled:
+  #     - docker
+  #     - authorization
+  #   disabled:
+  #     - admin
+  #     - step-up-authentication
+  proxy:
+    headers: xforwarded
+  ingress:
+    enabled: false
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: keycloak
+  annotations:
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - auth.home.arpa
+      secretName: keycloak-tls-secret
+  rules:
+    - host: auth.home.arpa
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak-service
+                port:
+                  number: 8080
