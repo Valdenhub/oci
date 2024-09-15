@@ -1,0 +1,77 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unifi-pod
+spec:
+  containers:
+    - name: unifi-network-application
+      image: docker.io/linuxserver/unifi-network-application:8.4.62
+      envFrom:
+        - configMapRef:
+            name: unifi-config
+      volumeMounts:
+        - name: unifi-data
+          mountPath: /config
+      ports:
+        - containerPort: 8443
+        - containerPort: 3478
+          protocol: UDP
+        - containerPort: 10001
+          protocol: UDP
+        - containerPort: 8080
+        - containerPort: 1900
+          protocol: UDP
+        - containerPort: 8843
+        - containerPort: 8880
+        - containerPort: 6789
+        - containerPort: 5514
+          protocol: UDP
+    - name: unifi-db
+      image: docker.io/mongo:7.0.14
+      envFrom:
+        - configMapRef:
+            name: unifi-db-config
+      volumeMounts:
+        - name: db-data
+          mountPath: /data/db
+        - name: init-mongo-entrypoint
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+  volumes:
+    - name: unifi-data
+      persistentVolumeClaim:
+        claimName: unifi-config-volume
+    - name: db-data
+      persistentVolumeClaim:
+        claimName: unifi-db-data-volume
+    - name: init-mongo-entrypoint
+      configMap:
+        name: init-mongo-entrypoint
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: init-mongo-entrypoint
+data:
+  init-mongo.sh: |
+    #!/bin/bash
+
+    if which mongosh > /dev/null 2>&1; then
+      mongo_init_bin='mongosh'
+    else
+      mongo_init_bin='mongo'
+    fi
+    "${mongo_init_bin}" <<EOF
+    use ${MONGO_AUTHSOURCE}
+    db.auth("${MONGO_INITDB_ROOT_USERNAME}", "${MONGO_INITDB_ROOT_PASSWORD}")
+    db.createUser({
+      user: "${MONGO_USER}",
+      pwd: "${MONGO_PASS}",
+      roles: [
+        { db: "${MONGO_DBNAME}", role: "dbOwner" },
+        { db: "${MONGO_DBNAME}_stat", role: "dbOwner" }
+      ]
+    })
+    EOF
